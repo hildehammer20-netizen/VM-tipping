@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VM-tipping 2026</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <p class="eyebrow">Intern tippekonkurranse</p>
+      <h1>VM-tipping 2026</h1>
+      <p>Fyll inn tipsene dine steg for steg. Innsending skjer først helt til slutt.</p>
+    </section>
+
+    <form id="tippeForm" class="card">
+      <div class="progress">
+        <div class="progress-text" id="progressText">Steg 1 av 9</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <div id="stepContent"></div>
+
+
+
+      <div class="nav-buttons">
+        <button type="button" id="backBtn" class="secondary">← Tilbake</button>
+        <button type="button" id="nextBtn" class="primary">Neste →</button>
+        <button type="submit" id="submitBtn" class="primary submit-hidden">Send inn tips</button>
+      </div>
+    </form>
+  </main>
+  <script src="data.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
