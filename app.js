@@ -367,7 +367,7 @@ function saveCurrentStep() {
     state.favoriteTeam = favoriteTeamSelect.value;
   }
 
-  if (currentStep === 1 || currentStep === 3) {
+  if (currentStep >= 1 && currentStep <= 3) {
     const scoreInputs = stepContent.querySelectorAll(".score");
 
     scoreInputs.forEach(input => {
