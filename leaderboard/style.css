@@ -118,6 +118,14 @@ button {
   transform: translate(-50%, -50%);
   text-align: center;
   filter: drop-shadow(0 7px 7px rgba(0,0,0,.38));
+
+  transition: transform 0.15s ease;
+  z-index: 1;
+}
+
+.player:hover {
+  transform: translate(-50%, -50%) scale(2.5);
+  z-index: 10000 !important;
 }
 
 .player-name,
