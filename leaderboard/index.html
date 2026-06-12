@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VM-tipping leaderboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="topbar">
+      <div>
+        <h1>VM-tipping</h1>
+        <p>Live leaderboard</p>
+      </div>
+      <button id="refreshBtn" type="button">Oppdater</button>
+    </header>
+
+    <section id="pitch" aria-label="Leaderboard på fotballbane">
+      <div class="goal goal-left"></div>
+      <div class="goal goal-right"></div>
+      <div class="line halfway"></div>
+      <div class="center-circle"></div>
+      <div class="box box-left"></div>
+      <div class="box box-right"></div>
+      <div id="players"></div>
+    </section>
+
+    <section class="table-wrap">
+      <h2>Tabell</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Plass</th>
+            <th>Spiller</th>
+            <th>Poeng</th>
+          </tr>
+        </thead>
+        <tbody id="scoreTable"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="leaderboard-data.js"></script>
+  <script src="leaderboard.js"></script>
+</body>
+</html>
