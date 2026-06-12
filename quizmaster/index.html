@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>VM dommerpanel – quizmatch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; background: #f4f4f4; color: #111; }
+  header { background: #111; color: white; padding: 18px 22px; }
+  main { max-width: 1240px; margin: 22px auto; padding: 0 14px; }
+  section { background: white; border-radius: 12px; padding: 18px; margin-bottom: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  h1,h2,h3 { margin-top: 0; }
+  button { padding: 10px 14px; border: 0; border-radius: 8px; background: #111; color: white; font-weight: bold; cursor: pointer; margin: 2px; }
+  button.secondary { background: #555; }
+  button.danger { background: #9b111e; }
+  button.publish { background: #16803a; }
+  button.small { padding: 7px 10px; font-size: 13px; }
+  select,input { padding: 9px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
+  input.score { width: 54px; text-align: center; }
+  input.answer { width: 100%; box-sizing: border-box; margin-top: 6px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+  .tab { display:none; }
+  .tab.active { display:block; }
+  .match { display:grid; grid-template-columns:70px 1fr 70px 20px 70px 118px; gap:10px; align-items:center; border-bottom:1px solid #eee; padding:10px 0; }
+  .match.done,.bonusRow.done { background:#f7fff7; }
+  .teams { font-weight:bold; }
+  .muted { color:#666; font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin-top:12px; }
+  th,td { border-bottom:1px solid #ddd; padding:9px 7px; text-align:left; vertical-align:top; }
+  th { font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+  .place { font-size:20px; font-weight:bold; }
+  .total { font-weight:bold; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eee; font-size:12px; }
+  .category { margin-top: 22px; }
+  .bonusRow { display:grid; grid-template-columns: 170px 1fr 360px 125px; gap:10px; align-items:start; border-bottom:1px solid #eee; padding:10px 0; }
+  .teamChecks { display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; max-height:220px; overflow:auto; padding:8px; border:1px solid #ddd; border-radius:8px; }
+  .teamChecks label { font-weight:normal; }
+  .msg { margin-top:10px; font-weight:bold; }
+  .warn { color:#9b111e; font-size:13px; margin-top:6px; }
+  @media(max-width:900px) {
+    .grid2 { grid-template-columns:1fr; }
+    .match,.bonusRow { grid-template-columns:1fr; }
+    input.score { width:100%; }
+    .teamChecks { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>VM dommerpanel – lokal test</h1>
+  <div>Ekte tips fra Excel kan lastes inn lokalt. Originalarket røres ikke.</div>
+</header>
+
+<main>
+  <section>
+    <div class="tabs">
+      <button onclick="openTab('tab-dashboard')">Leaderboard</button>
+      <button onclick="openTab('tab-matches')">Kamper</button>
+      <button onclick="openTab('tab-bonus')">Bonusfasit</button>
+      <button onclick="openTab('tab-review')">Tvilstilfeller</button>
+      <button class="publish" onclick="publishLeaderboard()">Publiser resultater</button>
+      <button onclick="openTab('tab-data')">Admin - ikke rør</button>
+    </div>
+
+    <div id="tab-dashboard" class="tab active">
+      <div class="grid2">
+        <div>
+          <h2>Leaderboard</h2>
+          <div id="leaderboard"></div>
+        </div>
+        <div>
+          <h2>Siste poengutslag</h2>
+          <div id="lastScored"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-matches" class="tab">
+      <h2>Kamper</h2>
+      <div class="toolbar">
+        <label for="dateFilter"><strong>Velg dato:</strong></label>
+        <select id="dateFilter" onchange="renderMatches()"></select>
+        <button class="secondary" onclick="showNextUnplayed()">Neste uspilt</button>
+        <button class="secondary" onclick="showAllDates()">Vis alle</button>
+      </div>
+      <div id="matches"></div>
+    </div>
+
+    <div id="tab-bonus" class="tab">
+      <h2>Bonusfasit</h2>
+      <p class="muted">Lagspørsmål, ja/nei, dueller og sluttspillspørsmål har nå faste valg. Spillerspørsmål har forslag + manuelt felt.</p>
+      <div class="toolbar">
+        <label for="bonusCategoryFilter"><strong>Kategori:</strong></label>
+        <select id="bonusCategoryFilter" onchange="renderBonus()"></select>
+        <button class="secondary" onclick="showAllBonus()">Vis alle</button>
+      </div>
+      <div id="bonus"></div>
+    </div>
+
+    <div id="tab-review" class="tab">
+      <h2>Tvilstilfeller</h2>
+      <p class="muted">Prototype: Her vises manuelle deltakersvar som ikke matcher fasit etter normalisering/alias. I demodata er noen svar bevisst skrevet som alias eller med nesten-staving.</p>
+      <div id="review"></div>
+    </div>
+
+    <div id="tab-data" class="tab">
+      <h2>Testdata</h2>
+      <p class="muted">Ekte tips er forhåndsimportert fra Excel-filen du lastet opp. Originalfilen endres ikke.</p>
+      <button onclick="loadRealParticipants()">Last inn ekte tips fra Excel</button>
+      <button class="secondary" onclick="loadDemoParticipants()">Last inn demodeltakere</button>
+      <button class="secondary" onclick="exportState()">Eksporter testdata</button>
+      <button class="secondary" onclick="publishLeaderboard()">Publiser leaderboard</button>
+      <button class="secondary" onclick="importPrompt()">Importer testdata</button>
+      <button class="danger" onclick="resetAll()">Nullstill alt</button>
+      <div id="setupMsg" class="msg"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const STORAGE_KEY = 'vm_quizmatch_lokal_v4';
+const INITIAL_MATCHES = [{"id": 1, "isoDate": "2026-06-11", "dateLabel": "11. juni", "homeTeam": "Mexico", "awayTeam": "Sør-Afrika", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 2, "isoDate": "2026-06-12", "dateLabel": "12. juni", "homeTeam": "Sør-Korea", "awayTeam": "Tsjekkia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 3, "isoDate": "2026-06-12", "dateLabel": "12. juni", "homeTeam": "Canada", "awayTeam": "Bosnia-Hercegovina", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 4, "isoDate": "2026-06-13", "dateLabel": "13. juni", "homeTeam": "USA", "awayTeam": "Paraguay", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 5, "isoDate": "2026-06-13", "dateLabel": "13. juni", "homeTeam": "Qatar", "awayTeam": "Sveits", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 6, "isoDate": "2026-06-14", "dateLabel": "14. juni", "homeTeam": "Brasil", "awayTeam": "Marokko", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 7, "isoDate": "2026-06-14", "dateLabel": "14. juni", "homeTeam": "Haiti", "awayTeam": "Skottland", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 8, "isoDate": "2026-06-14", "dateLabel": "14. juni", "homeTeam": "Australia", "awayTeam": "Tyrkia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 9, "isoDate": "2026-06-14", "dateLabel": "14. juni", "homeTeam": "Tyskland", "awayTeam": "Curaçao", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 10, "isoDate": "2026-06-14", "dateLabel": "14. juni", "homeTeam": "Nederland", "awayTeam": "Japan", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 11, "isoDate": "2026-06-15", "dateLabel": "15. juni", "homeTeam": "Elfenbenskysten", "awayTeam": "Ecuador", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 12, "isoDate": "2026-06-15", "dateLabel": "15. juni", "homeTeam": "Sverige", "awayTeam": "Tunisia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 13, "isoDate": "2026-06-15", "dateLabel": "15. juni", "homeTeam": "Spania", "awayTeam": "Kapp Verde", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 14, "isoDate": "2026-06-15", "dateLabel": "15. juni", "homeTeam": "Belgia", "awayTeam": "Egypt", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 15, "isoDate": "2026-06-16", "dateLabel": "16. juni", "homeTeam": "Saudi-Arabia", "awayTeam": "Uruguay", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 16, "isoDate": "2026-06-16", "dateLabel": "16. juni", "homeTeam": "Iran", "awayTeam": "New Zealand", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 17, "isoDate": "2026-06-16", "dateLabel": "16. juni", "homeTeam": "Frankrike", "awayTeam": "Senegal", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 18, "isoDate": "2026-06-17", "dateLabel": "17. juni", "homeTeam": "Irak", "awayTeam": "Norge", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 19, "isoDate": "2026-06-17", "dateLabel": "17. juni", "homeTeam": "Argentina", "awayTeam": "Algerie", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 20, "isoDate": "2026-06-17", "dateLabel": "17. juni", "homeTeam": "Østerrike", "awayTeam": "Jordan", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 21, "isoDate": "2026-06-17", "dateLabel": "17. juni", "homeTeam": "Portugal", "awayTeam": "DR Kongo", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 22, "isoDate": "2026-06-17", "dateLabel": "17. juni", "homeTeam": "England", "awayTeam": "Kroatia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 23, "isoDate": "2026-06-18", "dateLabel": "18. juni", "homeTeam": "Ghana", "awayTeam": "Panama", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 24, "isoDate": "2026-06-18", "dateLabel": "18. juni", "homeTeam": "Usbekistan", "awayTeam": "Colombia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 25, "isoDate": "2026-06-18", "dateLabel": "18. juni", "homeTeam": "Tsjekkia", "awayTeam": "Sør-Afrika", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 26, "isoDate": "2026-06-18", "dateLabel": "18. juni", "homeTeam": "Sveits", "awayTeam": "Bosnia-Hercegovina", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 27, "isoDate": "2026-06-19", "dateLabel": "19. juni", "homeTeam": "Canada", "awayTeam": "Qatar", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 28, "isoDate": "2026-06-19", "dateLabel": "19. juni", "homeTeam": "Mexico", "awayTeam": "Sør-Korea", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 29, "isoDate": "2026-06-19", "dateLabel": "19. juni", "homeTeam": "USA", "awayTeam": "Australia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 30, "isoDate": "2026-06-20", "dateLabel": "20. juni", "homeTeam": "Skottland", "awayTeam": "Marokko", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 31, "isoDate": "2026-06-20", "dateLabel": "20. juni", "homeTeam": "Brasil", "awayTeam": "Haiti", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 32, "isoDate": "2026-06-20", "dateLabel": "20. juni", "homeTeam": "Tyrkia", "awayTeam": "Paraguay", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 33, "isoDate": "2026-06-20", "dateLabel": "20. juni", "homeTeam": "Nederland", "awayTeam": "Sverige", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 34, "isoDate": "2026-06-20", "dateLabel": "20. juni", "homeTeam": "Tyskland", "awayTeam": "Elfenbenskysten", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 35, "isoDate": "2026-06-21", "dateLabel": "21. juni", "homeTeam": "Ecuador", "awayTeam": "Curaçao", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 36, "isoDate": "2026-06-21", "dateLabel": "21. juni", "homeTeam": "Tunisia", "awayTeam": "Japan", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 37, "isoDate": "2026-06-21", "dateLabel": "21. juni", "homeTeam": "Spania", "awayTeam": "Saudi-Arabia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 38, "isoDate": "2026-06-21", "dateLabel": "21. juni", "homeTeam": "Belgia", "awayTeam": "Iran", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 39, "isoDate": "2026-06-22", "dateLabel": "22. juni", "homeTeam": "Uruguay", "awayTeam": "Kapp Verde", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 40, "isoDate": "2026-06-22", "dateLabel": "22. juni", "homeTeam": "New Zealand", "awayTeam": "Egypt", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 41, "isoDate": "2026-06-22", "dateLabel": "22. juni", "homeTeam": "Argentina", "awayTeam": "Østerrike", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 42, "isoDate": "2026-06-22", "dateLabel": "22. juni", "homeTeam": "Frankrike", "awayTeam": "Irak", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 43, "isoDate": "2026-06-23", "dateLabel": "23. juni", "homeTeam": "Norge", "awayTeam": "Senegal", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 44, "isoDate": "2026-06-23", "dateLabel": "23. juni", "homeTeam": "Jordan", "awayTeam": "Algerie", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 45, "isoDate": "2026-06-23", "dateLabel": "23. juni", "homeTeam": "Portugal", "awayTeam": "Usbekistan", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 46, "isoDate": "2026-06-23", "dateLabel": "23. juni", "homeTeam": "England", "awayTeam": "Ghana", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 47, "isoDate": "2026-06-24", "dateLabel": "24. juni", "homeTeam": "Panama", "awayTeam": "Kroatia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 48, "isoDate": "2026-06-24", "dateLabel": "24. juni", "homeTeam": "Colombia", "awayTeam": "DR Kongo", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 49, "isoDate": "2026-06-24", "dateLabel": "24. juni", "homeTeam": "Sveits", "awayTeam": "Canada", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 50, "isoDate": "2026-06-24", "dateLabel": "24. juni", "homeTeam": "Bosnia-Hercegovina", "awayTeam": "Qatar", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 51, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Skottland", "awayTeam": "Brasil", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 52, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Marokko", "awayTeam": "Haiti", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 53, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Mexico", "awayTeam": "Tsjekkia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 54, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Sør-Afrika", "awayTeam": "Sør-Korea", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 55, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Curaçao", "awayTeam": "Elfenbenskysten", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 56, "isoDate": "2026-06-25", "dateLabel": "25. juni", "homeTeam": "Ecuador", "awayTeam": "Tyskland", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 57, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Tunisia", "awayTeam": "Nederland", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 58, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Japan", "awayTeam": "Sverige", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 59, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Tyrkia", "awayTeam": "USA", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 60, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Paraguay", "awayTeam": "Australia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 61, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Norge", "awayTeam": "Frankrike", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 62, "isoDate": "2026-06-26", "dateLabel": "26. juni", "homeTeam": "Senegal", "awayTeam": "Irak", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 63, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "Kapp Verde", "awayTeam": "Saudi-Arabia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 64, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "Uruguay", "awayTeam": "Spania", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 65, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "Egypt", "awayTeam": "Iran", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 66, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "New Zealand", "awayTeam": "Belgia", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 67, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "Panama", "awayTeam": "England", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 68, "isoDate": "2026-06-27", "dateLabel": "27. juni", "homeTeam": "Kroatia", "awayTeam": "Ghana", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 69, "isoDate": "2026-06-28", "dateLabel": "28. juni", "homeTeam": "Colombia", "awayTeam": "Portugal", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 70, "isoDate": "2026-06-28", "dateLabel": "28. juni", "homeTeam": "DR Kongo", "awayTeam": "Usbekistan", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 71, "isoDate": "2026-06-28", "dateLabel": "28. juni", "homeTeam": "Algerie", "awayTeam": "Østerrike", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}, {"id": 72, "isoDate": "2026-06-28", "dateLabel": "28. juni", "homeTeam": "Jordan", "awayTeam": "Argentina", "homeGoals": "", "awayGoals": "", "status": "IKKE_SPILT"}];
+const REAL_PARTICIPANTS = [{"navn": "i", "favorittlag": "Curaçao", "innsendt": "2026-06-05T08:53:52.024Z", "matchTips": {"1": [2, 1], "2": [0, 2], "3": [1, 0], "4": [2, 2], "5": [0, 2], "6": [4, 0], "7": [0, 3], "8": [1, 1], "9": [4, 0], "10": [3, 1], "11": [1, 1], "12": [0, 2], "13": [6, 0], "14": [3, 1], "15": [0, 2], "16": [0, 0], "17": [3, 2], "18": [1, 4], "19": [3, 0], "20": [2, 0], "21": [4, 2], "22": [2, 1], "23": [1, 2], "24": [0, 3], "25": [2, 0], "26": [1, 1], "27": [0, 0], "28": [1, 0], "29": [2, 2], "30": [2, 1], "31": [5, 0], "32": [1, 1], "33": [3, 1], "34": [3, 1], "35": [2, 1], "36": [1, 2], "37": [4, 1], "38": [3, 1], "39": [2, 0], "40": [2, 2], "41": [3, 1], "42": [3, 0], "43": [2, 2], "44": [1, 1], "45": [2, 0], "46": [1, 1], "47": [2, 3], "48": [2, 0], "49": [0, 0], "50": [1, 1], "51": [1, 3], "52": [1, 0], "53": [2, 2], "54": [1, 2], "55": [0, 2], "56": [1, 2], "57": [0, 2], "58": [2, 2], "59": [1, 2], "60": [0, 0], "61": [1, 1], "62": [2, 0], "63": [0, 0], "64": [2, 3], "65": [2, 2], "66": [0, 2], "67": [0, 2], "68": [2, 1], "69": [1, 2], "70": [1, 0], "71": [0, 0], "72": [0, 2]}, "bonusTips": {"gruppespill_1": "Tsjekkia", "gruppespill_2": "Spania", "gruppespill_3": "Kapp Verde", "gruppespill_4": "7", "gruppespill_5": "3", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "6", "gruppespill_10": "Kapp Verde", "isak_over_1": "Nei", "haaland_kane": "Like mange", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Sør-Korea", "Bosnia-Hercegovina", "Qatar", "Haiti", "Paraguay", "Curaçao", "Sverige", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Afrika", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Tunisia", "forste_rode_kort": "Bosnia-Hercegovina", "forste_selvmal": "Haiti", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "Gruppespillet", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Spania", "Brasil", "Portugal", "Argentina"], "vinner": "Spania", "nummer_to": "Portugal", "bronse": "Brasil", "tillegg_finale": "7", "siste_mal": "Oyarzabal", "toppscorer": "Raphinha", "totalt_mal": "243"}}, {"navn": "Finn Egén Mobæk", "favorittlag": "Tyskland", "innsendt": "2026-06-05T14:27:20.952Z", "matchTips": {"1": [1, 1], "2": [2, 0], "3": [1, 0], "4": [2, 1], "5": [1, 2], "6": [3, 0], "7": [0, 2], "8": [1, 1], "9": [4, 0], "10": [2, 1], "11": [0, 0], "12": [1, 0], "13": [5, 0], "14": [2, 1], "15": [1, 2], "16": [2, 2], "17": [4, 0], "18": [1, 3], "19": [3, 1], "20": [1, 0], "21": [5, 0], "22": [1, 1], "23": [0, 1], "24": [1, 2], "25": [1, 1], "26": [2, 0], "27": [2, 0], "28": [1, 2], "29": [1, 1], "30": [2, 0], "31": [3, 0], "32": [2, 1], "33": [4, 0], "34": [5, 0], "35": [1, 0], "36": [2, 3], "37": [5, 0], "38": [2, 1], "39": [3, 0], "40": [1, 1], "41": [2, 1], "42": [3, 0], "43": [2, 1], "44": [2, 2], "45": [3, 1], "46": [2, 1], "47": [1, 2], "48": [2, 0], "49": [2, 0], "50": [1, 1], "51": [1, 2], "52": [0, 0], "53": [1, 1], "54": [1, 2], "55": [1, 3], "56": [0, 5], "57": [1, 3], "58": [1, 1], "59": [1, 2], "60": [0, 2], "61": [1, 1], "62": [1, 0], "63": [1, 2], "64": [0, 2], "65": [1, 0], "66": [2, 2], "67": [1, 2], "68": [2, 1], "69": [0, 3], "70": [1, 1], "71": [1, 2], "72": [0, 2]}, "bonusTips": {"gruppespill_1": "England", "gruppespill_2": "Spania", "gruppespill_3": "Curaçao", "gruppespill_4": "6", "gruppespill_5": "2", "gruppespill_6": "Nei", "gruppespill_7": "Ja", "gruppespill_8": "Ja", "gruppespill_9": "2", "gruppespill_10": "DR Kongo", "isak_over_1": "Nei", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Ja", "salah_scorer": "Nei", "ikke_videre_16": ["Sør-Afrika", "Bosnia-Hercegovina", "Qatar", "Marokko", "Haiti", "Paraguay", "Curaçao", "Elfenbenskysten", "Tunisia", "Iran", "Kapp Verde", "Irak", "Algerie", "Jordan", "DR Kongo", "Ghana"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Tunisia", "forste_rode_kort": "Argentina", "forste_selvmal": "Curaçao", "ronaldo_starter": "Nei", "neymar_starter": "Nei", "van_dijk_scorer": "Ja", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "Gruppespillet", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["England", "Frankrike", "Tyskland", "Spania"], "vinner": "Tyskland", "nummer_to": "Frankrike", "bronse": "Argentina", "tillegg_finale": "5", "siste_mal": "Havertz", "toppscorer": "Kane", "totalt_mal": "200"}}, {"navn": "Bente", "favorittlag": "Portugal", "innsendt": "2026-06-05T21:22:10.613Z", "matchTips": {"1": [1, 1], "2": [1, 2], "3": [0, 0], "4": [1, 0], "5": [1, 3], "6": [3, 1], "7": [0, 3], "8": [2, 2], "9": [4, 1], "10": [3, 1], "11": [3, 0], "12": [1, 1], "13": [5, 1], "14": [2, 1], "15": [0, 2], "16": [0, 0], "17": [2, 1], "18": [1, 2], "19": [1, 0], "20": [3, 0], "21": [2, 0], "22": [1, 1], "23": [2, 1], "24": [0, 1], "25": [1, 1], "26": [2, 0], "27": [1, 0], "28": [1, 1], "29": [1, 1], "30": [0, 1], "31": [4, 0], "32": [2, 1], "33": [3, 1], "34": [2, 2], "35": [2, 0], "36": [0, 0], "37": [3, 0], "38": [4, 0], "39": [3, 0], "40": [0, 1], "41": [0, 0], "42": [3, 1], "43": [2, 1], "44": [0, 0], "45": [1, 1], "46": [2, 1], "47": [0, 2], "48": [1, 0], "49": [1, 0], "50": [1, 0], "51": [0, 2], "52": [2, 0], "53": [0, 0], "54": [1, 1], "55": [0, 3], "56": [0, 2], "57": [1, 2], "58": [0, 0], "59": [0, 2], "60": [1, 1], "61": [1, 1], "62": [2, 0], "63": [0, 0], "64": [1, 1], "65": [2, 1], "66": [1, 2], "67": [0, 3], "68": [1, 1], "69": [0, 0], "70": [1, 0], "71": [1, 1], "72": [1, 2]}, "bonusTips": {"gruppespill_1": "USA", "gruppespill_2": "Spania", "gruppespill_3": "Curaçao", "gruppespill_4": "5", "gruppespill_5": "4", "gruppespill_6": "Nei", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "6", "gruppespill_10": "Kapp Verde", "isak_over_1": "Nei", "haaland_kane": "Haaland", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Ja", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Korea", "Canada", "Qatar", "Haiti", "Skottland", "Paraguay", "Curaçao", "Ecuador", "Sverige", "Iran", "Kapp Verde", "Irak", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Afrika", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Paraguay", "forste_selvmal": "Belgia", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Ja", "usa_stopp": "8-delsfinale", "norge_slar_brasil": "Nei", "eskas": "Kvartfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Frankrike", "Spania", "Argentina", "Nederland"], "vinner": "Spania", "nummer_to": "Argentina", "bronse": "Nederland", "tillegg_finale": "8", "siste_mal": "Yamal", "toppscorer": "Yamal", "totalt_mal": "271"}}, {"navn": "Ruud", "favorittlag": "England", "innsendt": "2026-06-08T07:49:18.152Z", "matchTips": {"1": [2, 0], "2": [1, 1], "3": [1, 0], "4": [1, 1], "5": [0, 1], "6": [2, 1], "7": [0, 0], "8": [0, 1], "9": [4, 0], "10": [2, 1], "11": [2, 0], "12": [0, 0], "13": [3, 0], "14": [1, 1], "15": [0, 1], "16": [1, 1], "17": [1, 0], "18": [0, 2], "19": [2, 0], "20": [2, 0], "21": [2, 0], "22": [0, 0], "23": [1, 0], "24": [0, 2], "25": [1, 1], "26": [0, 0], "27": [2, 0], "28": [1, 0], "29": [2, 1], "30": [0, 1], "31": [3, 0], "32": [1, 1], "33": [1, 0], "34": [2, 2], "35": [2, 0], "36": [1, 1], "37": [2, 0], "38": [1, 0], "39": [2, 0], "40": [0, 1], "41": [3, 1], "42": [2, 0], "43": [1, 1], "44": [0, 1], "45": [3, 0], "46": [1, 0], "47": [0, 2], "48": [2, 0], "49": [0, 0], "50": [1, 0], "51": [0, 2], "52": [3, 0], "53": [1, 0], "54": [0, 0], "55": [0, 3], "56": [1, 2], "57": [1, 1], "58": [1, 1], "59": [0, 0], "60": [2, 1], "61": [0, 1], "62": [3, 0], "63": [0, 1], "64": [1, 2], "65": [2, 1], "66": [0, 0], "67": [0, 2], "68": [1, 1], "69": [1, 1], "70": [2, 2], "71": [1, 1], "72": [0, 2]}, "bonusTips": {"gruppespill_1": "Canada", "gruppespill_2": "Argentina", "gruppespill_3": "Curaçao", "gruppespill_4": "3", "gruppespill_5": "2", "gruppespill_6": "Nei", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "4", "gruppespill_10": "Curaçao", "isak_over_1": "Ja", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Korea", "Tsjekkia", "Qatar", "Haiti", "Paraguay", "Australia", "Curaçao", "Japan", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Irak", "Jordan", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Afrika", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Tunisia", "forste_rode_kort": "Australia", "forste_selvmal": "Qatar", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "Gruppespillet", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Argentina", "Frankrike", "Spania", "England"], "vinner": "Frankrike", "nummer_to": "Spania", "bronse": "England", "tillegg_finale": "8", "siste_mal": "Mbappe", "toppscorer": "Mbappe", "totalt_mal": "291"}}, {"navn": "André Berger", "favorittlag": "Tyskland", "innsendt": "2026-06-08T12:41:54.186Z", "matchTips": {"1": [2, 1], "2": [2, 2], "3": [1, 3], "4": [0, 1], "5": [0, 3], "6": [1, 1], "7": [1, 2], "8": [2, 1], "9": [4, 0], "10": [3, 2], "11": [1, 1], "12": [1, 1], "13": [5, 1], "14": [3, 0], "15": [0, 2], "16": [2, 1], "17": [1, 0], "18": [1, 3], "19": [3, 1], "20": [1, 0], "21": [3, 0], "22": [2, 1], "23": [2, 2], "24": [3, 3], "25": [2, 1], "26": [1, 1], "27": [1, 0], "28": [3, 2], "29": [1, 1], "30": [0, 2], "31": [4, 1], "32": [2, 4], "33": [2, 0], "34": [3, 1], "35": [1, 1], "36": [1, 1], "37": [3, 0], "38": [1, 1], "39": [2, 2], "40": [1, 0], "41": [2, 1], "42": [2, 1], "43": [3, 1], "44": [0, 0], "45": [2, 0], "46": [2, 0], "47": [2, 2], "48": [2, 1], "49": [2, 0], "50": [2, 0], "51": [0, 1], "52": [2, 0], "53": [1, 1], "54": [2, 2], "55": [0, 0], "56": [1, 2], "57": [1, 1], "58": [1, 0], "59": [1, 1], "60": [2, 2], "61": [1, 1], "62": [2, 1], "63": [1, 0], "64": [0, 0], "65": [2, 2], "66": [1, 3], "67": [0, 5], "68": [2, 1], "69": [1, 3], "70": [1, 1], "71": [2, 1], "72": [1, 2]}, "bonusTips": {"gruppespill_1": "Bosnia-Hercegovina", "gruppespill_2": "Tyskland", "gruppespill_3": "Haiti", "gruppespill_4": "5", "gruppespill_5": "2", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Ja", "gruppespill_9": "3", "gruppespill_10": "Haiti", "isak_over_1": "Nei", "haaland_kane": "Like mange", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "USA", "Curaçao", "Ecuador", "Sverige", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Algerie", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Like bra", "forste_rode_kort": "Qatar", "forste_selvmal": "Curaçao", "ronaldo_starter": "Ja", "neymar_starter": "Ja", "van_dijk_scorer": "Ja", "usa_stopp": "Gruppespillet", "norge_slar_brasil": "Nei", "eskas": "Gruppespillet", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Argentina", "England", "Frankrike", "Norge"], "vinner": "England", "nummer_to": "Argentina", "bronse": "Norge", "tillegg_finale": "5", "siste_mal": "Declan Rice", "toppscorer": "Harry Kane", "totalt_mal": "113"}}, {"navn": "Daniel", "favorittlag": "Brasil", "innsendt": "2026-06-08T21:25:26.476Z", "matchTips": {"1": [2, 1], "2": [2, 1], "3": [1, 0], "4": [2, 1], "5": [0, 2], "6": [2, 1], "7": [1, 2], "8": [0, 2], "9": [4, 0], "10": [1, 0], "11": [1, 0], "12": [1, 0], "13": [3, 1], "14": [3, 1], "15": [0, 1], "16": [1, 0], "17": [4, 1], "18": [0, 2], "19": [2, 1], "20": [1, 0], "21": [3, 0], "22": [2, 1], "23": [2, 0], "24": [1, 3], "25": [1, 0], "26": [1, 0], "27": [1, 0], "28": [1, 0], "29": [1, 0], "30": [0, 1], "31": [4, 0], "32": [2, 1], "33": [1, 0], "34": [2, 0], "35": [2, 0], "36": [0, 1], "37": [3, 1], "38": [2, 1], "39": [1, 0], "40": [0, 1], "41": [2, 0], "42": [3, 0], "43": [2, 2], "44": [0, 1], "45": [3, 0], "46": [2, 0], "47": [0, 2], "48": [2, 0], "49": [2, 1], "50": [2, 0], "51": [1, 3], "52": [2, 0], "53": [1, 0], "54": [0, 1], "55": [0, 2], "56": [1, 3], "57": [1, 2], "58": [0, 1], "59": [3, 3], "60": [1, 0], "61": [1, 3], "62": [2, 1], "63": [1, 1], "64": [1, 2], "65": [1, 0], "66": [0, 3], "67": [0, 2], "68": [2, 2], "69": [1, 2], "70": [1, 0], "71": [1, 1], "72": [0, 2]}, "bonusTips": {"gruppespill_1": "Canada", "gruppespill_2": "Tyskland", "gruppespill_3": "Curaçao", "gruppespill_4": "5", "gruppespill_5": "3", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "4", "gruppespill_10": "Curaçao", "isak_over_1": "Ja", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Ja", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Australia", "Curaçao", "Sverige", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Portugal", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "DR Kongo", "forste_selvmal": "Curaçao", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "16-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Ja", "semifinalister": ["Brasil", "Frankrike", "Portugal", "Argentina"], "vinner": "Brasil", "nummer_to": "Frankrike", "bronse": "Portugal", "tillegg_finale": "7", "siste_mal": "V.Junior", "toppscorer": "Mbappe", "totalt_mal": "250"}}, {"navn": "ThomasWB", "favorittlag": "Haiti", "innsendt": "2026-06-09T10:56:07.356Z", "matchTips": {"1": [2, 1], "2": [1, 1], "3": [1, 1], "4": [2, 1], "5": [0, 2], "6": [1, 1], "7": [0, 3], "8": [0, 0], "9": [4, 0], "10": [2, 2], "11": [1, 1], "12": [2, 0], "13": [6, 0], "14": [2, 0], "15": [0, 2], "16": [2, 0], "17": [1, 0], "18": [0, 1], "19": [1, 0], "20": [2, 0], "21": [3, 0], "22": [1, 1], "23": [0, 1], "24": [0, 3], "25": [1, 1], "26": [1, 1], "27": [1, 0], "28": [1, 1], "29": [2, 0], "30": [0, 2], "31": [5, 0], "32": [1, 0], "33": [2, 1], "34": [2, 0], "35": [3, 0], "36": [1, 2], "37": [2, 0], "38": [1, 1], "39": [1, 0], "40": [0, 1], "41": [1, 0], "42": [3, 0], "43": [1, 1], "44": [0, 1], "45": [4, 0], "46": [3, 1], "47": [0, 1], "48": [2, 0], "49": [1, 1], "50": [3, 0], "51": [0, 2], "52": [3, 0], "53": [1, 0], "54": [0, 1], "55": [0, 2], "56": [1, 3], "57": [1, 2], "58": [2, 2], "59": [1, 1], "60": [2, 1], "61": [0, 2], "62": [2, 0], "63": [0, 1], "64": [1, 3], "65": [1, 0], "66": [1, 0], "67": [1, 3], "68": [1, 1], "69": [1, 1], "70": [0, 0], "71": [1, 1], "72": [0, 4]}, "bonusTips": {"gruppespill_1": "USA", "gruppespill_2": "Portugal", "gruppespill_3": "Haiti", "gruppespill_4": "2", "gruppespill_5": "3", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "1", "gruppespill_10": "Haiti", "isak_over_1": "Nei", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Skottland", "Australia", "Curaçao", "Tunisia", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "DR Kongo", "Usbekistan", "Ghana", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Bosnia-Hercegovina", "forste_selvmal": "Mexico", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Ja", "eskas": "16-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Frankrike", "Spania", "Portugal", "Argentina"], "vinner": "Spania", "nummer_to": "Argentina", "bronse": "Portugal", "tillegg_finale": "5", "siste_mal": "Oyarzabal", "toppscorer": "Oyarzabal", "totalt_mal": "164"}}, {"navn": "Eskil", "favorittlag": "Kapp Verde", "innsendt": "2026-06-09T11:55:52.534Z", "matchTips": {"1": [2, 0], "2": [1, 2], "3": [2, 1], "4": [2, 0], "5": [0, 2], "6": [2, 2], "7": [0, 4], "8": [1, 2], "9": [5, 0], "10": [3, 2], "11": [1, 3], "12": [0, 1], "13": [8, 0], "14": [3, 1], "15": [0, 2], "16": [0, 1], "17": [2, 0], "18": [0, 4], "19": [3, 0], "20": [5, 0], "21": [9, 0], "22": [2, 0], "23": [2, 1], "24": [0, 3], "25": [2, 0], "26": [2, 0], "27": [2, 0], "28": [2, 0], "29": [1, 0], "30": [1, 3], "31": [8, 0], "32": [2, 1], "33": [4, 0], "34": [3, 0], "35": [4, 0], "36": [1, 3], "37": [6, 0], "38": [2, 0], "39": [6, 0], "40": [1, 2], "41": [3, 1], "42": [5, 0], "43": [2, 1], "44": [0, 2], "45": [5, 0], "46": [3, 0], "47": [0, 2], "48": [3, 0], "49": [2, 1], "50": [2, 1], "51": [2, 3], "52": [8, 0], "53": [2, 1], "54": [1, 1], "55": [0, 3], "56": [1, 2], "57": [1, 2], "58": [3, 1], "59": [2, 1], "60": [2, 1], "61": [1, 3], "62": [4, 0], "63": [1, 2], "64": [1, 3], "65": [2, 1], "66": [0, 2], "67": [0, 3], "68": [2, 1], "69": [1, 3], "70": [0, 1], "71": [1, 2], "72": [0, 5]}, "bonusTips": {"gruppespill_1": "Tsjekkia", "gruppespill_2": "Spania", "gruppespill_3": "Haiti", "gruppespill_4": "6", "gruppespill_5": "4", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "7", "gruppespill_10": "Haiti", "isak_over_1": "Nei", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Paraguay", "Curaçao", "Sverige", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Algerie", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Sør-Afrika", "forste_selvmal": "Bosnia-Hercegovina", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "8-delsfinale", "norge_slar_brasil": "Nei", "eskas": "8-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Ja", "semifinalister": ["Frankrike", "Spania", "Portugal", "Argentina"], "vinner": "Spania", "nummer_to": "Portugal", "bronse": "Frankrike", "tillegg_finale": "6", "siste_mal": "Lamine Jamal", "toppscorer": "Ronaldo ", "totalt_mal": "217"}}, {"navn": "Hilde Hammer", "favorittlag": "Japan", "innsendt": "2026-06-09T17:08:30.225Z", "matchTips": {"1": [2, 0], "2": [1, 2], "3": [1, 1], "4": [2, 1], "5": [0, 2], "6": [2, 1], "7": [0, 2], "8": [1, 2], "9": [4, 0], "10": [2, 1], "11": [1, 1], "12": [2, 0], "13": [3, 0], "14": [2, 1], "15": [0, 2], "16": [2, 0], "17": [2, 1], "18": [0, 2], "19": [3, 0], "20": [2, 0], "21": [2, 1], "22": [1, 1], "23": [2, 1], "24": [0, 2], "25": [2, 0], "26": [2, 1], "27": [2, 1], "28": [2, 0], "29": [2, 1], "30": [1, 1], "31": [4, 0], "32": [2, 1], "33": [1, 1], "34": [2, 0], "35": [3, 0], "36": [1, 2], "37": [3, 0], "38": [2, 0], "39": [3, 0], "40": [0, 2], "41": [2, 0], "42": [3, 0], "43": [2, 1], "44": [0, 2], "45": [3, 0], "46": [2, 1], "47": [0, 2], "48": [2, 0], "49": [2, 1], "50": [2, 1], "51": [0, 2], "52": [3, 0], "53": [2, 1], "54": [1, 1], "55": [0, 2], "56": [1, 2], "57": [0, 2], "58": [2, 1], "59": [1, 1], "60": [2, 1], "61": [1, 2], "62": [2, 0], "63": [1, 1], "64": [1, 1], "65": [1, 1], "66": [0, 2], "67": [0, 3], "68": [1, 1], "69": [1, 1], "70": [1, 1], "71": [1, 2], "72": [0, 3]}, "bonusTips": {"gruppespill_1": "Mexico", "gruppespill_2": "Brasil", "gruppespill_3": "Haiti", "gruppespill_4": "5", "gruppespill_5": "3", "gruppespill_6": "Nei", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "3", "gruppespill_10": "Curaçao", "isak_over_1": "Ja", "haaland_kane": "Haaland", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Ja", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Sør-Korea", "Bosnia-Hercegovina", "Qatar", "Haiti", "Australia", "Curaçao", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Irak", "Jordan", "DR Kongo", "Ghana", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Iran", "forste_selvmal": "Sør-Afrika", "ronaldo_starter": "Ja", "neymar_starter": "Ja", "van_dijk_scorer": "Ja", "usa_stopp": "Kvartfinale", "norge_slar_brasil": "Nei", "eskas": "Semifinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Ja", "semifinalister": ["Brasil", "Frankrike", "Argentina", "Spania"], "vinner": "Brasil", "nummer_to": "Frankrike", "bronse": "Argentina", "tillegg_finale": "8", "siste_mal": "Kylian Mbappé", "toppscorer": "Harry Kane", "totalt_mal": "189"}}, {"navn": "Martin", "favorittlag": "Paraguay", "innsendt": "2026-06-09T23:08:29.951Z", "matchTips": {"1": [2, 0], "2": [1, 1], "3": [1, 2], "4": [2, 1], "5": [0, 3], "6": [2, 1], "7": [0, 2], "8": [0, 2], "9": [6, 0], "10": [3, 1], "11": [3, 1], "12": [2, 0], "13": [6, 0], "14": [1, 1], "15": [0, 2], "16": [1, 1], "17": [2, 1], "18": [0, 1], "19": [3, 1], "20": [2, 0], "21": [3, 1], "22": [2, 2], "23": [2, 0], "24": [0, 2], "25": [1, 1], "26": [2, 1], "27": [2, 0], "28": [1, 1], "29": [2, 0], "30": [1, 3], "31": [3, 0], "32": [2, 1], "33": [2, 1], "34": [2, 0], "35": [3, 1], "36": [0, 2], "37": [4, 1], "38": [2, 0], "39": [4, 1], "40": [1, 3], "41": [2, 1], "42": [3, 1], "43": [1, 2], "44": [0, 2], "45": [3, 0], "46": [1, 1], "47": [0, 3], "48": [2, 1], "49": [2, 0], "50": [1, 0], "51": [1, 2], "52": [4, 0], "53": [2, 1], "54": [1, 2], "55": [0, 4], "56": [0, 3], "57": [1, 3], "58": [2, 2], "59": [2, 1], "60": [1, 1], "61": [0, 2], "62": [3, 1], "63": [0, 1], "64": [1, 3], "65": [2, 1], "66": [1, 3], "67": [0, 4], "68": [2, 1], "69": [1, 1], "70": [1, 0], "71": [2, 2], "72": [0, 3]}, "bonusTips": {"gruppespill_1": "Tsjekkia", "gruppespill_2": "Tyskland", "gruppespill_3": "Curaçao", "gruppespill_4": "2", "gruppespill_5": "4", "gruppespill_6": "Nei", "gruppespill_7": "Nei", "gruppespill_8": "Nei", "gruppespill_9": "6", "gruppespill_10": "Curaçao", "isak_over_1": "Ja", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Paraguay", "Curaçao", "Ecuador", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Sverige", "spania_portugal": "Portugal", "iran_irak": "Like mange", "tunisia_algerie": "Algerie", "forste_rode_kort": "Bosnia-Hercegovina", "forste_selvmal": "Ecuador", "ronaldo_starter": "Ja", "neymar_starter": "Ja", "van_dijk_scorer": "Ja", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "Gruppespillet", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["Portugal", "Argentina", "Nederland", "Tyskland"], "vinner": "Nederland", "nummer_to": "Portugal", "bronse": "Tyskland", "tillegg_finale": "7", "siste_mal": "Gakpo", "toppscorer": "Undav", "totalt_mal": "203"}}, {"navn": "Thomas Trøa", "favorittlag": "Bosnia-Hercegovina", "innsendt": "2026-06-10T10:39:33.215Z", "matchTips": {"1": [4, 4], "2": [0, 1], "3": [0, 3], "4": [2, 0], "5": [1, 3], "6": [3, 2], "7": [0, 0], "8": [2, 2], "9": [7, 0], "10": [2, 1], "11": [1, 1], "12": [0, 4], "13": [4, 0], "14": [2, 1], "15": [0, 3], "16": [0, 2], "17": [3, 1], "18": [3, 0], "19": [4, 1], "20": [2, 0], "21": [1, 0], "22": [1, 1], "23": [0, 0], "24": [0, 3], "25": [1, 1], "26": [3, 0], "27": [1, 0], "28": [3, 0], "29": [1, 1], "30": [0, 3], "31": [6, 0], "32": [3, 1], "33": [4, 0], "34": [4, 0], "35": [2, 0], "36": [0, 1], "37": [6, 0], "38": [3, 0], "39": [2, 0], "40": [1, 0], "41": [1, 0], "42": [3, 0], "43": [2, 3], "44": [0, 0], "45": [1, 0], "46": [3, 0], "47": [0, 2], "48": [2, 0], "49": [2, 2], "50": [3, 1], "51": [1, 2], "52": [4, 1], "53": [2, 2], "54": [0, 0], "55": [0, 3], "56": [0, 2], "57": [1, 1], "58": [3, 0], "59": [1, 1], "60": [1, 0], "61": [0, 2], "62": [5, 0], "63": [0, 0], "64": [0, 3], "65": [2, 1], "66": [0, 2], "67": [0, 1], "68": [4, 0], "69": [1, 0], "70": [2, 0], "71": [0, 1], "72": [1, 6]}, "bonusTips": {"gruppespill_1": "Tsjekkia", "gruppespill_2": "Brasil", "gruppespill_3": "Curaçao", "gruppespill_4": "5", "gruppespill_5": "6", "gruppespill_6": "Nei", "gruppespill_7": "Ja", "gruppespill_8": "Ja", "gruppespill_9": "3", "gruppespill_10": "Sverige", "isak_over_1": "Nei", "haaland_kane": "Haaland", "nusa_schjelderup": "Schjelderup", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Sør-Korea", "Qatar", "Haiti", "Skottland", "USA", "Curaçao", "Sverige", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Like bra", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Like mange", "tunisia_algerie": "Algerie", "forste_rode_kort": "Brasil", "forste_selvmal": "Senegal", "ronaldo_starter": "Nei", "neymar_starter": "Ja", "van_dijk_scorer": "Ja", "usa_stopp": "Gruppespillet", "norge_slar_brasil": "Ja", "eskas": "8-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Ja", "semifinalister": ["Brasil", "Argentina", "Tyskland", "Spania"], "vinner": "Tyskland", "nummer_to": "Brasil", "bronse": "Argentina", "tillegg_finale": "6", "siste_mal": "Jamal Musiala", "toppscorer": "Erling Braut Haaland", "totalt_mal": "278"}}, {"navn": "Klaus Eriksen", "favorittlag": "Spania", "innsendt": "2026-06-10T10:55:44.432Z", "matchTips": {"1": [3, 0], "2": [0, 2], "3": [0, 0], "4": [1, 1], "5": [0, 3], "6": [1, 1], "7": [0, 2], "8": [1, 2], "9": [4, 0], "10": [2, 1], "11": [1, 1], "12": [2, 1], "13": [6, 0], "14": [2, 2], "15": [0, 1], "16": [1, 1], "17": [2, 1], "18": [0, 2], "19": [3, 1], "20": [1, 0], "21": [2, 0], "22": [2, 2], "23": [0, 0], "24": [0, 2], "25": [2, 1], "26": [2, 0], "27": [2, 1], "28": [2, 1], "29": [1, 1], "30": [1, 2], "31": [4, 0], "32": [2, 1], "33": [0, 0], "34": [3, 0], "35": [1, 1], "36": [1, 0], "37": [3, 0], "38": [3, 1], "39": [2, 0], "40": [0, 2], "41": [1, 0], "42": [4, 0], "43": [2, 1], "44": [0, 1], "45": [2, 0], "46": [2, 1], "47": [0, 1], "48": [2, 1], "49": [2, 1], "50": [1, 0], "51": [1, 3], "52": [3, 0], "53": [1, 1], "54": [0, 0], "55": [0, 1], "56": [0, 2], "57": [1, 2], "58": [1, 2], "59": [1, 2], "60": [2, 2], "61": [1, 3], "62": [3, 0], "63": [0, 1], "64": [1, 3], "65": [2, 1], "66": [1, 3], "67": [0, 2], "68": [2, 2], "69": [2, 2], "70": [1, 3], "71": [1, 2], "72": [0, 3]}, "bonusTips": {"gruppespill_1": "Canada", "gruppespill_2": "Argentina", "gruppespill_3": "Kapp Verde", "gruppespill_4": "5", "gruppespill_5": "3", "gruppespill_6": "Ja", "gruppespill_7": "Ja", "gruppespill_8": "Nei", "gruppespill_9": "6", "gruppespill_10": "Haiti", "isak_over_1": "Ja", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Australia", "Curaçao", "Japan", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Jordan", "DR Kongo", "Usbekistan", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Sverige", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Paraguay", "forste_selvmal": "Japan", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "16-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Nei", "semifinalister": ["England", "Argentina", "Spania", "Frankrike"], "vinner": "Argentina", "nummer_to": "Spania", "bronse": "Frankrike", "tillegg_finale": "8", "siste_mal": "Messi", "toppscorer": "Mbappe", "totalt_mal": "205"}}, {"navn": "Atle", "favorittlag": "Australia", "innsendt": "2026-06-10T10:56:31.435Z", "matchTips": {"1": [3, 0], "2": [0, 1], "3": [1, 2], "4": [2, 1], "5": [0, 2], "6": [1, 1], "7": [0, 1], "8": [0, 1], "9": [4, 0], "10": [2, 2], "11": [2, 2], "12": [0, 0], "13": [4, 0], "14": [2, 1], "15": [0, 2], "16": [0, 0], "17": [3, 1], "18": [0, 2], "19": [3, 1], "20": [1, 0], "21": [4, 0], "22": [1, 1], "23": [0, 0], "24": [0, 3], "25": [1, 0], "26": [2, 1], "27": [0, 0], "28": [1, 0], "29": [1, 0], "30": [0, 3], "31": [4, 0], "32": [2, 0], "33": [2, 0], "34": [3, 1], "35": [3, 0], "36": [0, 2], "37": [5, 0], "38": [2, 0], "39": [1, 0], "40": [0, 1], "41": [1, 0], "42": [4, 0], "43": [1, 1], "44": [0, 1], "45": [4, 0], "46": [2, 1], "47": [0, 1], "48": [3, 0], "49": [1, 0], "50": [3, 0], "51": [0, 2], "52": [4, 0], "53": [1, 0], "54": [1, 1], "55": [0, 3], "56": [1, 1], "57": [0, 1], "58": [2, 1], "59": [3, 1], "60": [1, 1], "61": [1, 1], "62": [2, 0], "63": [0, 0], "64": [1, 1], "65": [1, 0], "66": [0, 2], "67": [0, 2], "68": [1, 1], "69": [2, 2], "70": [1, 0], "71": [0, 1], "72": [0, 3]}, "bonusTips": {"gruppespill_1": "Bosnia-Hercegovina", "gruppespill_2": "Brasil", "gruppespill_3": "Curaçao", "gruppespill_4": "4", "gruppespill_5": "3", "gruppespill_6": "Nei", "gruppespill_7": "Nei", "gruppespill_8": "Nei", "gruppespill_9": "4", "gruppespill_10": "Curaçao", "isak_over_1": "Nei", "haaland_kane": "Kane", "nusa_schjelderup": "Nusa", "falchener_spilletid": "Nei", "salah_scorer": "Ja", "ikke_videre_16": ["Sør-Afrika", "Qatar", "Haiti", "Australia", "Curaçao", "Tunisia", "Iran", "New Zealand", "Kapp Verde", "Saudi-Arabia", "Irak", "Algerie", "Jordan", "Usbekistan", "Ghana", "Panama"], "sor_afrika_sor_korea": "Sør-Korea", "norge_sverige": "Norge", "spania_portugal": "Spania", "iran_irak": "Iran", "tunisia_algerie": "Algerie", "forste_rode_kort": "Sør-Afrika", "forste_selvmal": "Canada", "ronaldo_starter": "Ja", "neymar_starter": "Nei", "van_dijk_scorer": "Nei", "usa_stopp": "16-delsfinale", "norge_slar_brasil": "Nei", "eskas": "16-delsfinale", "fire_straffer_8dels": "Nei", "over_10_rode": "Ja", "semifinalister": ["Frankrike", "Portugal", "Spania", "Brasil"], "vinner": "Frankrike", "nummer_to": "Portugal", "bronse": "Spania", "tillegg_finale": "5", "siste_mal": "Dembele, Frankrike", "toppscorer": "Mbappe, Frankrike", "totalt_mal": "270"}}];
+const INITIAL_BONUS = [{"category": "2. Gruppespillet", "id": "gruppespill_1", "question": "Hvilket lag scorer VMs femte mål?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_2", "question": "Hvilket lag scorer flest mål i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_3", "question": "Hvilket lag slipper inn flest mål i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_4", "question": "Hvor mange mål scorer Norge i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "number", "options": [], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_5", "question": "Hvor mange mål slipper Norge inn i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "number", "options": [], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_6", "question": "Får Norge straffe i løpet av gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_7", "question": "Scorer Norge på dødball i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_8", "question": "Får Norge et mål annullert etter VAR i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_9", "question": "Hvor mange gule kort får Norge i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "number", "options": [], "maxChoices": null, "matchMode": "exact"}, {"category": "2. Gruppespillet", "id": "gruppespill_10", "question": "Hvem blir VMs dårligste lag? (Poeng/målforskjell avgjør)", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "3. Spillere", "id": "isak_over_1", "question": "Scorer svenske Alexander Isak mer enn ett mål i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "3. Spillere", "id": "haaland_kane", "question": "Hvem scorer flest: Haaland eller Kane?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Haaland", "Kane", "Like mange"], "maxChoices": null, "matchMode": "exact"}, {"category": "3. Spillere", "id": "nusa_schjelderup", "question": "Hvem spiller flest minutter i gruppespillet av Nusa og Schjelderup?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Nusa", "Schjelderup", "Like mange"], "maxChoices": null, "matchMode": "exact"}, {"category": "3. Spillere", "id": "falchener_spilletid", "question": "Får Henrik Falchener spilletid i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "3. Spillere", "id": "salah_scorer", "question": "Scorer Salah i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "4. Disse går ikke videre", "id": "ikke_videre_16", "question": "Velg de 16 lagene som IKKE går videre fra gruppespillet", "answer": "", "status": "IKKE_AVGJORT", "points": 2, "inputType": "multiteam", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": 16, "matchMode": "per_item"}, {"category": "5. Dueller", "id": "sor_afrika_sor_korea", "question": "Sør mot Sør: Hvem gjør det best av Sør-Afrika og Sør-Korea i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Sør-Afrika", "Sør-Korea", "Like bra"], "maxChoices": null, "matchMode": "exact"}, {"category": "5. Dueller", "id": "norge_sverige", "question": "Naboer: Hvem blir best av Norge og Sverige i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Norge", "Sverige", "Like bra"], "maxChoices": null, "matchMode": "exact"}, {"category": "5. Dueller", "id": "spania_portugal", "question": "Og hva med Spania og Portugal?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Spania", "Portugal", "Like bra"], "maxChoices": null, "matchMode": "exact"}, {"category": "5. Dueller", "id": "iran_irak", "question": "Hvem får flest poeng i gruppespillet av Iran og Irak?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Iran", "Irak", "Like mange"], "maxChoices": null, "matchMode": "exact"}, {"category": "5. Dueller", "id": "tunisia_algerie", "question": "Og hva med naboene Tunisia og Algerie?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Tunisia", "Algerie", "Like bra"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "forste_rode_kort", "question": "Hvilket lag får VMs første røde kort?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "forste_selvmal", "question": "Hvilket lag scorer VMs første selvmål?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "ronaldo_starter", "question": "Starter C. Ronaldo minimum to av tre kamper i gruppespillet?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "neymar_starter", "question": "Og hva med Neymar?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "van_dijk_scorer", "question": "Scorer Nederlands Virgil van Dijk i VM? (Eventuell straffekonk teller ikke)", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "usa_stopp", "question": "Når i VM sier det stopp for hjemmenasjonen USA?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Gruppespillet", "16-delsfinale", "Åttedelsfinale", "Kvartfinale", "Semifinale", "Finale", "Vinner VM"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "norge_slar_brasil", "question": "Kommer Norge til å slå Brasil i løpet av VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "eskas", "question": "Hvor langt kommer VM-dommer Espen Eskås?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ingen kamper", "Gruppespillet", "16-delsfinale", "Åttedelsfinale", "Kvartfinale", "Semifinale", "Bronsefinale", "Finale"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "fire_straffer_8dels", "question": "Det er åtte åttendelsfinaler. Vil minst fire av dem avgjøres med straffekonk?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "over_10_rode", "question": "Deles det ut over 10 røde kort i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Ja", "Nei"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "semifinalister", "question": "Tipp de fire semifinalistene", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "multiteam", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": 4, "matchMode": "per_item"}, {"category": "6. Diverse rør", "id": "vinner", "question": "Hvem vinner VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "nummer_to", "question": "Hvem blir nummer to?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "bronse", "question": "Hvem vinner bronsefinalen?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "choice", "options": ["Mexico", "Sør-Korea", "Sør-Afrika", "Tsjekkia", "Canada", "Sveits", "Qatar", "Bosnia-Hercegovina", "Brasil", "Marokko", "Skottland", "Haiti", "USA", "Australia", "Paraguay", "Tyrkia", "Tyskland", "Ecuador", "Elfenbenskysten", "Curaçao", "Nederland", "Japan", "Tunisia", "Sverige", "Belgia", "Iran", "Egypt", "New Zealand", "Spania", "Uruguay", "Saudi-Arabia", "Kapp Verde", "Frankrike", "Senegal", "Norge", "Irak", "Argentina", "Østerrike", "Algerie", "Jordan", "Portugal", "Colombia", "Usbekistan", "DR Kongo", "England", "Kroatia", "Panama", "Ghana"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "tillegg_finale", "question": "Hvor mange minutter legges det til i 2. omg. av VM-finalen?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "number", "options": [], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "siste_mal", "question": "Hvem (spiller) scorer VMs siste mål? (straffekonk teller ikke)", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "combo", "options": ["Alexander Isak", "Erling Braut Haaland", "Harry Kane", "Antonio Nusa", "Andreas Schjelderup", "Henrik Falchener", "Mohamed Salah", "Cristiano Ronaldo", "Neymar", "Virgil van Dijk", "Kylian Mbappé", "Lionel Messi", "Annet / skriv manuelt"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "toppscorer", "question": "Hvem blir toppscorer i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "combo", "options": ["Alexander Isak", "Erling Braut Haaland", "Harry Kane", "Antonio Nusa", "Andreas Schjelderup", "Henrik Falchener", "Mohamed Salah", "Cristiano Ronaldo", "Neymar", "Virgil van Dijk", "Kylian Mbappé", "Lionel Messi", "Annet / skriv manuelt"], "maxChoices": null, "matchMode": "exact"}, {"category": "6. Diverse rør", "id": "totalt_mal", "question": "Hvor mange mål scores det totalt i VM?", "answer": "", "status": "IKKE_AVGJORT", "points": 3, "inputType": "number", "options": [], "maxChoices": null, "matchMode": "exact"}];
+
+const ALIASES = {
+  'sor korea':'sør-korea',
+  'sør korea':'sør-korea',
+  'south korea':'sør-korea',
+  'saudi arabia':'saudi-arabia',
+  'bosnia hercegovina':'bosnia-hercegovina',
+  'bosnia and herzegovina':'bosnia-hercegovina',
+  'cape verde':'kapp verde',
+  'ivory coast':'elfenbenskysten',
+  'cote divoire':'elfenbenskysten',
+  'côte divoire':'elfenbenskysten',
+  'curacao':'curaçao',
+  'dr congo':'dr kongo',
+  'drc':'dr kongo',
+  'democratic republic of congo':'dr kongo',
+  'mbappe':'kylian mbappe',
+  'kylian mbappe':'kylian mbappe',
+  'haaland':'erling braut haaland',
+  'erling haaland':'erling braut haaland',
+  'erling braut haaland':'haaland',
+  'ronaldo':'cristiano ronaldo',
+  'cristiano ronaldo':'cristiano ronaldo',
+  'van dijk':'virgil van dijk',
+  'virgil van dijk':'virgil van dijk',
+  'salah':'mohamed salah',
+  'mo salah':'mohamed salah',
+  'mohamed salah':'mohamed salah'
+};
+
+function defaultState() {
+  return { matches: INITIAL_MATCHES, bonus: INITIAL_BONUS, participants: [], lastScored: null, manualOverrides: {} };
+}
+
+function getState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return defaultState();
+  const state = JSON.parse(raw);
+  if (!state.matches || state.matches.length !== INITIAL_MATCHES.length) state.matches = INITIAL_MATCHES;
+  if (!state.bonus || state.bonus.length !== INITIAL_BONUS.length) state.bonus = INITIAL_BONUS;
+  if (!state.manualOverrides) state.manualOverrides = {};
+  return state;
+}
+
+function setState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  renderAll();
+}
+
+function openTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  renderAll();
+}
+
+function loadRealParticipants() {
+  const state = getState();
+  state.participants = JSON.parse(JSON.stringify(REAL_PARTICIPANTS));
+  state.manualOverrides = {};
+  setState(state);
+  document.getElementById('setupMsg').textContent = `${REAL_PARTICIPANTS.length} ekte deltakere er lastet inn fra Excel-eksporten.`;
+}
+
+function loadDemoParticipants() {
+  const state = getState();
+  const names = ['Hilde','Thomas','Eskil','Bjørgu','Kjersti','Morten','Anne','Lars','Kristin','Martin'];
+  state.participants = names.map((name, idx) => {
+    const matchTips = {};
+    INITIAL_MATCHES.forEach(m => matchTips[m.id] = pseudoTip(m.id, idx));
+    const bonusTips = {};
+    INITIAL_BONUS.forEach((b, bidx) => bonusTips[b.id] = pseudoBonus(b, idx, bidx));
+    return { navn: name, matchTips, bonusTips };
+  });
+  state.manualOverrides = {};
+  setState(state);
+  document.getElementById('setupMsg').textContent = 'Demodeltakere lastet inn.';
+}
+
+function pseudoTip(matchId, personIndex) {
+  return [ (matchId*7 + personIndex*3)%4, (matchId*5 + personIndex*2)%4 ];
+}
+
+function pseudoBonus(b, personIndex, bidx) {
+  if (b.inputType === 'choice') {
+    if (b.id === 'vinner' && personIndex === 1) return 'Frankrike';
+    if (b.id === 'forste_selvmal' && personIndex === 2) return 'South Korea';
+    return b.options[(personIndex + bidx) % b.options.length];
+  }
+  if (b.inputType === 'combo') {
+    const variants = ['Mbappe','Kylian Mbappé','Haaland','Erling Braut Haaland','Mo Salah','Van Dijk','Mbape'];
+    return variants[(personIndex + bidx) % variants.length];
+  }
+  if (b.inputType === 'number') return String((personIndex + bidx) % 8);
+  if (b.inputType === 'multiteam') {
+    const n = b.maxChoices || 4;
+    return b.options.filter((_, i) => (i + personIndex + bidx) % 5 === 0).slice(0,n);
+  }
+  return '';
+}
+
+function saveMatch(id) {
+  const state = getState();
+  const m = state.matches.find(x => x.id === id);
+  const h = Number(document.getElementById(`h_${id}`).value);
+  const b = Number(document.getElementById(`b_${id}`).value);
+  if (!Number.isInteger(h) || !Number.isInteger(b) || h < 0 || b < 0) { alert('Mål må være hele tall fra 0 og oppover.'); return; }
+  m.homeGoals = h; m.awayGoals = b; m.status = 'FERDIG';
+  state.lastScored = { type:'match', id };
+  setState(state);
+}
+
+function reopenMatch(id) {
+  const state = getState();
+  const m = state.matches.find(x => x.id === id);
+  m.homeGoals = ''; m.awayGoals = ''; m.status = 'IKKE_SPILT';
+  setState(state);
+}
+
+function saveBonus(id) {
+  const state = getState();
+  const b = state.bonus.find(x => x.id === id);
+  if (b.inputType === 'multiteam') {
+    b.answer = Array.from(document.querySelectorAll(`input[name="bonus_${cssEscape(id)}"]:checked`)).map(x => x.value);
+    if (b.maxChoices && b.answer.length !== b.maxChoices) {
+      alert(`Du må velge nøyaktig ${b.maxChoices}.`);
+      return;
+    }
+  } else if (b.inputType === 'combo') {
+    const selected = document.getElementById(`bonus_answer_${id}`).value;
+    const manual = document.getElementById(`bonus_manual_${id}`).value.trim();
+    b.answer = manual || selected;
+  } else {
+    b.answer = document.getElementById(`bonus_answer_${id}`).value;
+  }
+  b.status = document.getElementById(`bonus_status_${id}`).value;
+  state.lastScored = b.status === 'FERDIG' ? { type:'bonus', id } : state.lastScored;
+  setState(state);
+}
+
+function calculateLeaderboard() {
+  const state = getState();
+  const finishedMatches = state.matches.filter(m => m.status === 'FERDIG');
+  const finishedBonus = state.bonus.filter(b => b.status === 'FERDIG' && hasAnswer(b.answer));
+  const rows = state.participants.map(p => {
+    let matchPoints = 0, bonusPoints = 0, exact = 0, lastDelta = 0;
+    finishedMatches.forEach(m => {
+      const tip = p.matchTips[m.id];
+      if (!tip) return;
+      const pts = pointsForMatch(tip[0], tip[1], Number(m.homeGoals), Number(m.awayGoals));
+      matchPoints += pts;
+      if (pts === 3) exact++;
+      if (state.lastScored && state.lastScored.type === 'match' && state.lastScored.id === m.id) lastDelta = pts;
+    });
+    finishedBonus.forEach(b => {
+      const pts = pointsForBonus(p, b, state);
+      bonusPoints += pts;
+      if (state.lastScored && state.lastScored.type === 'bonus' && state.lastScored.id === b.id) lastDelta = pts;
+    });
+    return { navn:p.navn, matchPoints, bonusPoints, total:matchPoints+bonusPoints, exact, lastDelta };
+  });
+  rows.sort((a,b) => b.total-a.total || b.exact-a.exact || a.navn.localeCompare(b.navn,'nb'));
+  let prev = null, prevPlace = 0;
+  return rows.map((r,i) => {
+    const place = r.total === prev ? prevPlace : i+1;
+    prev = r.total; prevPlace = place;
+    return {...r, place};
+  });
+}
+
+function pointsForMatch(tipH, tipB, fasitH, fasitB) {
+  if (tipH === fasitH && tipB === fasitB) return 3;
+  if (outcome(tipH, tipB) === outcome(fasitH, fasitB)) return 1;
+  return 0;
+}
+
+function pointsForBonus(participant, b, state) {
+  const key = `${participant.navn}::${b.id}`;
+  if (state.manualOverrides[key] === true) return Number(b.points || 3);
+  if (state.manualOverrides[key] === false) return 0;
+
+  const tip = participant.bonusTips[b.id];
+  if (b.inputType === 'multiteam') {
+    const tipArr = Array.isArray(tip) ? tip.map(canon) : [];
+    const ansArr = Array.isArray(b.answer) ? b.answer.map(canon) : [];
+    return tipArr.filter(t => ansArr.includes(t)).length * Number(b.points || 3);
+  }
+  return canon(tip) && canon(tip) === canon(b.answer) ? Number(b.points || 3) : 0;
+}
+
+function findReviewCases() {
+  const state = getState();
+  const cases = [];
+  const finishedBonus = state.bonus.filter(b => b.status === 'FERDIG' && hasAnswer(b.answer) && b.inputType !== 'multiteam');
+  state.participants.forEach(p => {
+    finishedBonus.forEach(b => {
+      const key = `${p.navn}::${b.id}`;
+      if (state.manualOverrides[key] !== undefined) return;
+      const tip = p.bonusTips[b.id];
+      if (!tip) return;
+      if (canon(tip) === canon(b.answer)) return;
+
+      const sim = similarity(canon(tip), canon(b.answer));
+      const fuzzy = maybeAliasMiss(tip, b.answer);
+      if (sim >= 0.50 || fuzzy) {
+        cases.push({ participant:p.navn, question:b.question, id:b.id, tip, answer:b.answer, sim });
+      }
+    });
+  });
+  return cases;
+}
+
+function findAutoAliasMatches() {
+  const state = getState();
+  const cases = [];
+  const finishedBonus = state.bonus.filter(b => b.status === 'FERDIG' && hasAnswer(b.answer) && b.inputType !== 'multiteam');
+  state.participants.forEach(p => {
+    finishedBonus.forEach(b => {
+      const tip = p.bonusTips[b.id];
+      if (!tip) return;
+      if (isAliasAutoMatch(tip, b.answer)) {
+        cases.push({ participant:p.navn, question:b.question, id:b.id, tip, answer:b.answer });
+      }
+    });
+  });
+  return cases;
+}
+
+function approveCase(participant, id, value) {
+  const state = getState();
+  state.manualOverrides[`${participant}::${id}`] = value;
+  setState(state);
+}
+
+function renderLeaderboard() {
+  const rows = calculateLeaderboard();
+  if (!rows.length) { document.getElementById('leaderboard').innerHTML = '<p>Ingen deltakere lastet inn ennå.</p>'; return; }
+  let html = '<table><tr><th>Plass</th><th>Navn</th><th>Kamper</th><th>Bonus</th><th>Total</th></tr>';
+  rows.forEach(r => html += `<tr><td class="place">${r.place}</td><td>${esc(r.navn)}</td><td>${r.matchPoints}</td><td>${r.bonusPoints}</td><td class="total">${r.total}</td></tr>`);
+  html += '</table>';
+  document.getElementById('leaderboard').innerHTML = html;
+}
+
+function renderLastScored() {
+  const state = getState();
+  if (!state.lastScored) { document.getElementById('lastScored').innerHTML = '<p>Ingen fasit registrert ennå.</p>'; return; }
+  let title = '';
+  if (state.lastScored.type === 'match') {
+    const m = state.matches.find(x => x.id === state.lastScored.id);
+    title = `Kamp ${m.id}: ${m.homeTeam} – ${m.awayTeam} ${m.homeGoals}–${m.awayGoals}`;
+  } else {
+    const b = state.bonus.find(x => x.id === state.lastScored.id);
+    title = `${b.category}: ${b.question}`;
+  }
+  const rows = calculateLeaderboard().filter(r => r.lastDelta > 0).sort((a,b) => b.lastDelta-a.lastDelta || a.navn.localeCompare(b.navn,'nb'));
+  let html = `<p><strong>${esc(title)}</strong></p>`;
+  if (!rows.length) html += '<p>Ingen fikk poeng på siste fasit.</p>';
+  else {
+    html += '<table><tr><th>Navn</th><th>Poeng</th></tr>';
+    rows.forEach(r => html += `<tr><td>${esc(r.navn)}</td><td class="total">+${r.lastDelta}</td></tr>`);
+    html += '</table>';
+  }
+  document.getElementById('lastScored').innerHTML = html;
+}
+
+function renderReview() {
+  const cases = findReviewCases();
+  const auto = findAutoAliasMatches();
+
+  let html = '';
+
+  if (!cases.length) {
+    html += '<h3>Gule treff: Må vurderes</h3><p>Ingen tvilstilfeller akkurat nå.</p>';
+  } else {
+    html += '<h3>Gule treff: Må vurderes</h3>';
+    html += '<table><tr><th>Deltaker</th><th>Spørsmål</th><th>Svar</th><th>Fasit</th><th>Vurder</th></tr>';
+    cases.forEach(c => {
+      html += `<tr><td>${esc(c.participant)}</td><td>${esc(c.question)}</td><td>${esc(c.tip)}</td><td>${esc(c.answer)}</td><td><button class="small" onclick="approveCase('${jsStr(c.participant)}','${jsStr(c.id)}',true)">Godkjenn</button><button class="small danger" onclick="approveCase('${jsStr(c.participant)}','${jsStr(c.id)}',false)">Avvis</button></td></tr>`;
+    });
+    html += '</table>';
+  }
+
+  html += '<h3>Grønne alias-treff: Automatisk godkjent</h3>';
+  if (!auto.length) {
+    html += '<p>Ingen alias-treff akkurat nå.</p>';
+  } else {
+    html += '<table><tr><th>Deltaker</th><th>Spørsmål</th><th>Svar</th><th>Fasit</th></tr>';
+    auto.forEach(c => {
+      html += `<tr><td>${esc(c.participant)}</td><td>${esc(c.question)}</td><td>${esc(c.tip)}</td><td>${esc(c.answer)}</td></tr>`;
+    });
+    html += '</table>';
+  }
+
+  document.getElementById('review').innerHTML = html;
+}
+
+function renderDateFilter() {
+  const select = document.getElementById('dateFilter');
+  if (!select) return;
+  const old = select.value || 'ALL';
+  const dates = [...new Set(getState().matches.map(m => m.dateLabel))];
+  select.innerHTML = '<option value="ALL">Alle datoer</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+  select.value = dates.includes(old) ? old : 'ALL';
+}
+
+function renderMatches() {
+  const el = document.getElementById('matches');
+  if (!el) return;
+  const state = getState();
+  const filter = document.getElementById('dateFilter').value || 'ALL';
+  const visible = filter === 'ALL' ? state.matches : state.matches.filter(m => m.dateLabel === filter);
+  const grouped = groupBy(visible, m => m.dateLabel);
+  let html = '';
+  Object.keys(grouped).forEach(date => {
+    html += `<div class="category"><h3>${date}</h3>`;
+    grouped[date].forEach(m => {
+      html += `<div class="match ${m.status === 'FERDIG' ? 'done' : ''}" id="match_${m.id}">
+        <div><span class="pill">Kamp ${m.id}</span></div>
+        <div class="teams">${esc(m.homeTeam)} – ${esc(m.awayTeam)}<div class="muted">${m.status === 'FERDIG' ? 'Ferdig' : 'Ikke spilt'}</div></div>
+        <input class="score" id="h_${m.id}" type="number" min="0" value="${m.homeGoals}">
+        <div>–</div>
+        <input class="score" id="b_${m.id}" type="number" min="0" value="${m.awayGoals}">
+        <div><button class="small" onclick="saveMatch(${m.id})">Lagre</button>${m.status === 'FERDIG' ? `<button class="small secondary" onclick="reopenMatch(${m.id})">Åpne</button>` : ''}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderBonusCategoryFilter() {
+  const select = document.getElementById('bonusCategoryFilter');
+  if (!select) return;
+  const old = select.value || 'ALL';
+  const cats = [...new Set(getState().bonus.map(b => b.category))];
+  select.innerHTML = '<option value="ALL">Alle kategorier</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  select.value = cats.includes(old) ? old : 'ALL';
+}
+
+function renderBonus() {
+  const el = document.getElementById('bonus');
+  if (!el) return;
+  const state = getState();
+  const filter = document.getElementById('bonusCategoryFilter').value || 'ALL';
+  const visible = filter === 'ALL' ? state.bonus : state.bonus.filter(b => b.category === filter);
+  const grouped = groupBy(visible, b => b.category);
+  let html = '';
+  Object.keys(grouped).forEach(cat => {
+    html += `<div class="category"><h3>${esc(cat)}</h3>`;
+    grouped[cat].forEach(b => {
+      html += `<div class="bonusRow ${b.status === 'FERDIG' ? 'done' : ''}">
+        <div><span class="pill">${b.points} p${b.matchMode === 'per_item' ? ' per treff' : ''}</span><div class="muted">${esc(b.id)}</div></div>
+        <div><strong>${esc(b.question)}</strong><div class="muted">${b.status === 'FERDIG' ? 'Ferdig' : 'Ikke avgjort'}</div></div>
+        <div>${answerControl(b)}</div>
+        <div>
+          <select id="bonus_status_${b.id}">
+            <option value="IKKE_AVGJORT" ${b.status !== 'FERDIG' ? 'selected' : ''}>Ikke avgjort</option>
+            <option value="FERDIG" ${b.status === 'FERDIG' ? 'selected' : ''}>Ferdig</option>
+          </select>
+          <button class="small" onclick="saveBonus('${jsStr(b.id)}')">Lagre</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function answerControl(b) {
+  if (b.inputType === 'choice') {
+    return `<select id="bonus_answer_${b.id}"><option value="">Velg fasit</option>${b.options.map(o => `<option value="${escAttr(o)}" ${canon(b.answer)===canon(o)?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+  }
+  if (b.inputType === 'combo') {
+    const isKnown = b.options.map(canon).includes(canon(b.answer));
+    return `<select id="bonus_answer_${b.id}"><option value="">Velg spiller/forslag</option>${b.options.map(o => `<option value="${escAttr(o)}" ${canon(b.answer)===canon(o)?'selected':''}>${esc(o)}</option>`).join('')}</select><input class="answer" id="bonus_manual_${b.id}" value="${isKnown ? '' : escAttr(b.answer)}" placeholder="Eller skriv manuelt">`;
+  }
+  if (b.inputType === 'number') {
+    return `<input class="answer" id="bonus_answer_${b.id}" type="number" value="${escAttr(b.answer)}">`;
+  }
+  if (b.inputType === 'multiteam') {
+    const ans = Array.isArray(b.answer) ? b.answer.map(canon) : [];
+    const count = Array.isArray(b.answer) ? b.answer.length : 0;
+    return `<div class="muted">Velg ${b.maxChoices || 'flere'}. Valgt: ${count}</div><div class="teamChecks">${b.options.map(o => `<label><input type="checkbox" name="bonus_${escAttr(b.id)}" value="${escAttr(o)}" ${ans.includes(canon(o))?'checked':''}> ${esc(o)}</label>`).join('')}</div>`;
+  }
+  return `<input class="answer" id="bonus_answer_${b.id}" value="${escAttr(b.answer)}" placeholder="Skriv fasit">`;
+}
+
+function showNextUnplayed() {
+  const state = getState();
+  const next = state.matches.find(m => m.status !== 'FERDIG');
+  if (!next) return;
+  document.getElementById('dateFilter').value = next.dateLabel;
+  renderMatches();
+  setTimeout(() => document.getElementById(`match_${next.id}`)?.scrollIntoView({behavior:'smooth', block:'center'}), 50);
+}
+function showAllDates() { document.getElementById('dateFilter').value = 'ALL'; renderMatches(); }
+function showAllBonus() { document.getElementById('bonusCategoryFilter').value = 'ALL'; renderBonus(); }
+function outcome(h,b) { if (h>b) return 'H'; if (h<b) return 'B'; return 'U'; }
+function hasAnswer(v) { return Array.isArray(v) ? v.length > 0 : canon(v) !== ''; }
+
+function canon(v) {
+  let s = String(v ?? '').trim().toLowerCase();
+  s = s.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  s = s.replace(/[–—-]/g,' ');
+  s = s.replace(/[^a-z0-9æøå\s]/gi,'');
+  s = s.replace(/\s+/g,' ').trim();
+  const aliasKey = s;
+  return ALIASES[aliasKey] || s;
+}
+
+function maybeAliasMiss(a,b) {
+  const ca = canon(a), cb = canon(b);
+  if (ca.includes(cb) || cb.includes(ca)) return true;
+
+  const aParts = ca.split(' ').filter(Boolean);
+  const bParts = cb.split(' ').filter(Boolean);
+  const aLast = aParts[aParts.length - 1] || ca;
+  const bLast = bParts[bParts.length - 1] || cb;
+
+  if (aLast && bLast && similarity(aLast, bLast) >= 0.72) return true;
+  if (aParts.some(x => similarity(x, bLast) >= 0.72)) return true;
+  if (bParts.some(x => similarity(x, aLast) >= 0.72)) return true;
+
+  return false;
+}
+
+function isAliasAutoMatch(a,b) {
+  const rawA = basicNorm(a);
+  const rawB = basicNorm(b);
+  return rawA !== rawB && canon(a) === canon(b);
+}
+
+function basicNorm(v) {
+  return String(v ?? '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[–—-]/g,' ')
+    .replace(/[^a-z0-9æøå\s]/gi,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function similarity(a,b) {
+  if (!a || !b) return 0;
+  const dist = levenshtein(a,b);
+  return 1 - dist / Math.max(a.length,b.length);
+}
+
+function levenshtein(a,b) {
+  const dp = Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));
+  for(let i=0;i<=a.length;i++) dp[i][0]=i;
+  for(let j=0;j<=b.length;j++) dp[0][j]=j;
+  for(let i=1;i<=a.length;i++) {
+    for(let j=1;j<=b.length;j++) {
+      dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function groupBy(arr, fn) { return arr.reduce((a,x) => { const k=fn(x); (a[k] ||= []).push(x); return a; }, {}); }
+function cssEscape(s) { return String(s).replace(/"/g,'\\"'); }
+function jsStr(s) { return String(s).replace(/'/g,"\\'"); }
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+function escAttr(v) { return esc(v); }
+
+
+function publishLeaderboard() {
+  const rows = calculateLeaderboard();
+
+  const avatarMap = {
+    "Atle": "avatars/Atle.png",
+    "Bente": "avatars/Bente.png",
+    "Berger": "avatars/Berger.png",
+    "André Berger": "avatars/Berger.png",
+    "Daniel": "avatars/Daniel.png",
+    "David": "avatars/david.png",
+    "Eskil": "avatars/Eskil.png",
+    "Finn": "avatars/Finn.png",
+    "Finn Egén Mobæk": "avatars/Finn.png",
+    "Glenn": "avatars/Glenn.png",
+    "Hilde": "avatars/Hilde.png",
+    "Hilde Hammer": "avatars/Hilde.png",
+    "i": "avatars/i.png",
+    "I": "avatars/i.png",
+    "Kenneth": "avatars/Kenneth.png",
+    "Klaus": "avatars/Klaus.png",
+    "Klaus Eriksen": "avatars/Klaus.png",
+    "Ludt": "avatars/Ludt.png",
+    "Øyvind Ludt": "avatars/Ludt.png",
+    "Martin": "avatars/Martin.png",
+    "Ruud": "avatars/Ruud.png",
+    "ThomasWB": "avatars/ThomasWB.png",
+    "Thomas Trøa": "avatars/TT.png",
+    "Trine": "avatars/Trine.png",
+    "TT": "avatars/TT.png"
+  };
+
+  const displayNameMap = {
+    "André Berger": "Berger",
+    "Finn Egén Mobæk": "Finn",
+    "Hilde Hammer": "Hilde",
+    "Klaus Eriksen": "Klaus",
+    "Thomas Trøa": "TT"
+  };
+
+  const leaderboardData = rows.map(r => ({
+    name: displayNameMap[r.navn] || r.navn,
+    fullName: r.navn,
+    points: Number(r.total) || 0,
+    place: r.place,
+    matchPoints: Number(r.matchPoints) || 0,
+    bonusPoints: Number(r.bonusPoints) || 0,
+    exact: Number(r.exact) || 0,
+    avatar: avatarMap[r.navn] || avatarMap[displayNameMap[r.navn]] || ""
+  }));
+
+  downloadTextFile(
+    "leaderboard-data.js",
+    "window.LEADERBOARD_DATA = " + JSON.stringify(leaderboardData, null, 2) + ";\\n",
+    "application/javascript"
+  );
+
+  alert("Leaderboard er eksportert. Legg leaderboard-data.js i samme mappe som leaderboard.html på GitHub Pages.");
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportState() {
+  const blob = new Blob([JSON.stringify(getState(), null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'vm-dommerpanel-quizmatch-testdata.json'; a.click(); URL.revokeObjectURL(url);
+}
+function importPrompt() {
+  const txt = prompt('Lim inn JSON fra eksportert testdata:');
+  if (!txt) return;
+  try { setState(JSON.parse(txt)); } catch(e) { alert('Kunne ikke lese JSON.'); }
+}
+function resetAll() {
+  if (!confirm('Nullstille alle lokale testdata?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  renderAll();
+}
+
+function renderAll() {
+  renderDateFilter();
+  renderBonusCategoryFilter();
+  renderLeaderboard();
+  renderLastScored();
+  renderMatches();
+  renderBonus();
+  renderReview();
+}
+renderAll();
+</script>
+</body>
+</html>
