@@ -70,6 +70,16 @@ window.LEADERBOARD_DATA = [
     "avatar": "avatars/Kenneth.png"
   },
   {
+    "name": "Berger",
+    "fullName": "André Berger",
+    "points": 6,
+    "place": 8,
+    "matchPoints": 6,
+    "bonusPoints": 0,
+    "exact": 1,
+    "avatar": "avatars/Berger.png"
+  },
+  {
     "name": "Daniel",
     "fullName": "Daniel",
     "points": 6,
@@ -90,20 +100,10 @@ window.LEADERBOARD_DATA = [
     "avatar": "avatars/Klaus.png"
   },
   {
-    "name": "Berger",
-    "fullName": "André Berger",
-    "points": 5,
-    "place": 10,
-    "matchPoints": 5,
-    "bonusPoints": 0,
-    "exact": 1,
-    "avatar": "avatars/Berger.png"
-  },
-  {
     "name": "David",
     "fullName": "David",
     "points": 5,
-    "place": 10,
+    "place": 11,
     "matchPoints": 5,
     "bonusPoints": 0,
     "exact": 1,
@@ -113,7 +113,7 @@ window.LEADERBOARD_DATA = [
     "name": "Martin",
     "fullName": "Martin",
     "points": 5,
-    "place": 10,
+    "place": 11,
     "matchPoints": 5,
     "bonusPoints": 0,
     "exact": 1,
@@ -179,4 +179,4 @@ window.LEADERBOARD_DATA = [
     "exact": 0,
     "avatar": "avatars/TT.png"
   }
-];
+];\n
