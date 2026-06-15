@@ -76,7 +76,7 @@ const pointRange = Math.max(maxPoints - minPoints, 1);
     
     group.forEach((player, playerIndex) => {
   const lane = LANES.indexOf(player.name);
-  const baseY = 5 + lane * (90 / (LANES.length - 1));
+  const baseY = 8 + lane * (84 / (LANES.length - 1));
 
   const offset = { x: 0, y: 0 };
 
