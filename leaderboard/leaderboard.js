@@ -69,12 +69,15 @@ function renderPitch(players) {
     const baseX = 5 + progress * 90;
 
     // Litt større avstand mellom poenggruppene.
-    const baseY = 20 + groupIndex * (60 / Math.max(groups.length - 1, 1));
-
+    
     group.forEach((player, playerIndex) => {
-      const offset = CLUSTER_OFFSETS[playerIndex % CLUSTER_OFFSETS.length];
+  const lane = LANES.indexOf(player.name);
+  const baseY = 5 + lane * (90 / (LANES.length - 1));
 
-      const el = document.createElement("article");
+  const offset = CLUSTER_OFFSETS[playerIndex % CLUSTER_OFFSETS.length];
+
+  const el = document.createElement("article");
+      
       el.className = "player";
       el.style.left = `calc(${baseX}% + ${offset.x}px)`;
       el.style.top = `calc(${baseY}% + ${offset.y}px)`;
