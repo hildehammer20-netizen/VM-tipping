@@ -62,11 +62,15 @@ function renderPitch(players) {
   holder.innerHTML = "";
 
   const groups = groupByPoints(sortPlayers(players));
+  const allPoints = players.map(p => Number(p.points) || 0);
+const minPoints = Math.min(...allPoints);
+const maxPoints = Math.max(...allPoints);
+const pointRange = Math.max(maxPoints - minPoints, 1);
   let z = 500;
 
   groups.forEach(([points, group], groupIndex) => {
-    const progress = clamp(points / MAX_POINTS, 0, 1);
-    const baseX = 5 + progress * 90;
+    const progress = (points - minPoints) / pointRange;
+    const baseX = 15 + progress * 70;
 
     // Litt større avstand mellom poenggruppene.
     
