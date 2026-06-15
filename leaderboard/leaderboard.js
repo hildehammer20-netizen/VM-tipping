@@ -78,7 +78,7 @@ const pointRange = Math.max(maxPoints - minPoints, 1);
   const lane = LANES.indexOf(player.name);
   const baseY = 5 + lane * (90 / (LANES.length - 1));
 
-  const offset = CLUSTER_OFFSETS[playerIndex % CLUSTER_OFFSETS.length];
+  const offset = { x: 0, y: 0 };
 
   const el = document.createElement("article");
       
