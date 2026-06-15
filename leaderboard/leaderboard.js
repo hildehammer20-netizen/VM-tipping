@@ -1,6 +1,25 @@
 
 const MAX_POINTS = 100;
-
+const LANES = [
+  "Glenn",
+  "Atle",
+  "ThomasWB",
+  "Øyvind Ludt",
+  "Hilde",
+  "Martin",
+  "Kenneth",
+  "Eskil",
+  "Daniel",
+  "Berger",
+  "Finn",
+  "David",
+  "Bente",
+  "Klaus",
+  "Trine",
+  "TT",
+  "Ruud",
+  "i"
+];
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
