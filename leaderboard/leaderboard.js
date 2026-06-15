@@ -1,5 +1,5 @@
 
-const MAX_POINTS = 100;
+const MAX_POINTS = 40;
 const LANES = [
   "Glenn",
   "Atle",
