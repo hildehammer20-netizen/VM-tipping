@@ -1,5 +1,5 @@
 
-const MAX_POINTS = 50;
+const MAX_POINTS = 100;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
