@@ -3,7 +3,7 @@ const MAX_POINTS = 40;
 const LANES = [
   "Glenn",
   "Hilde",
-  "ThomasWB",
+  "Finn",
   "Øyvind Ludt",
   "Atle",
   "Martin",
@@ -11,7 +11,7 @@ const LANES = [
   "Trine",
   "Daniel",
   "Berger",
-  "Finn",
+  "ThomasWB",
   "Kenneth",
   "Bente",
   "Klaus",
