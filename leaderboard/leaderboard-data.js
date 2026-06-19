@@ -179,4 +179,4 @@ window.LEADERBOARD_DATA = [
     "exact": 2,
     "avatar": "avatars/Trine.png"
   }
-];\n
+];
